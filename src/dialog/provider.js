@@ -9,7 +9,7 @@ import mkdirp from 'mkdirp'
 import { validateFlowSchema } from './validator'
 
 export default class FlowProvider extends EventEmitter2 {
-  constructor({ logger, botfile, projectLocation }) {
+  constructor({ logger, botfile, projectLocation, ghostManager }) {
     super({
       wildcard: true,
       maxListeners: 100
@@ -18,6 +18,7 @@ export default class FlowProvider extends EventEmitter2 {
     this.logger = logger
     this.botfile = botfile
     this.projectLocation = projectLocation
+    this.ghostManager = ghostManager
   }
 
   async loadAll() {
@@ -94,12 +95,21 @@ export default class FlowProvider extends EventEmitter2 {
     const flowsToSave = await Promise.mapSeries(flows, flow => this._prepareSaveFlow(flow))
 
     for (const { flowPath, uiPath, flowContent, uiContent } of flowsToSave) {
-      if (flowPath.includes('/')) {
-        mkdirp.sync(path.dirname(flowPath))
+      const path = flowPath
+        .split('/')
+        .slice(0, -1)
+        .join('/')
+      const flowFileName = flowPath.split('/')[flowPath.split('/').length - 1]
+      const uiFileName = uiPath.split('/')[uiPath.split('/').length - 1]
+      if (path) {
+        // mkdirp.sync(path.dirname(flowPath))
+        await this.ghostManager.addFolder(path, '**/*.json')
       }
 
-      fs.writeFileSync(flowPath, JSON.stringify(flowContent, null, 2))
-      fs.writeFileSync(uiPath, JSON.stringify(uiContent, null, 2))
+      // fs.writeFileSync(flowPath, JSON.stringify(flowContent, null, 2))
+      // fs.writeFileSync(uiPath, JSON.stringify(uiContent, null, 2))
+      this.ghostManager.recordRevision(path, flowFileName, JSON.stringify(flowContent, null, 2))
+      this.ghostManager.recordRevision(path, uiFileName, JSON.stringify(uiContent, null, 2))
     }
 
     const flowsDir = path.resolve(this.projectLocation, this.botfile.flowsDir || './flows')
